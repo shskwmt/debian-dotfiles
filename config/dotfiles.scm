@@ -18,5 +18,5 @@
   ((name . emacs-config)
    (action . clone)
    (source . "https://github.com/shskwmt/hikizan-emacs")
-   (target . "~/.emacs.d"))
+   (target . ".emacs.d"))
 )
