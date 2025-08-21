@@ -64,12 +64,36 @@
            (call-with-output-file target
              (lambda (out) (display data out)))
            (when mode (chmod-str target mode)))))
+      ((clone)
+       (let ((url (assq-ref entry 'source))
+             (target (abs-target (assq-ref entry 'target))))
+         (if (file-exists? target)
+             (if (git-repo? target)
+                 (begin
+                   (info "~a Updating git repository: ~a~%" (if dry? "[DRY]" "") target)
+                   (unless dry?
+                     (run! "git" "-C" target "pull")))
+                 (begin
+                   (info "~a Target ~a exists but is not a git repository. Backing up and cloning.~%" (if dry? "[DRY]" "") target)
+                   (unless dry?
+                     (backup-if-exists target)
+                     (run! "git" "clone" url target))))
+             (begin
+               (info "~a Cloning ~a into ~a~%" (if dry? "[DRY]" "") url target)
+               (unless dry?
+                 (ensure-dir (dirname target))
+                 (run! "git" "clone" url target))))))
       (else
        (stderr "Unknown action: ~a~%" action) (exit 1)))))
 
 (define* (uninstall-one entry #:key (dry? #f))
-  (let* ((target-r (assq-ref entry 'target))
+  (let* ((action   (assq-ref entry 'action))
+         (target-r (assq-ref entry 'target))
          (target   (abs-target target-r)))
-    (when (file-exists? target)
-      (info "~a ~a~%" (if dry? "[DRY] remove" "remove") target)
-      (unless dry? (delete-file target)))))
+    (case action
+      ((clone)
+       (info "~a Skipping uninstall for git repository: ~a~%" (if dry? "[DRY]" "") target))
+      (else
+       (when (file-exists? target)
+         (info "~a ~a~%" (if dry? "[DRY] remove" "remove") target)
+         (unless dry? (delete-file target)))))))

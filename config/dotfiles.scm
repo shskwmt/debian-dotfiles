@@ -14,4 +14,9 @@
    (target . ".gitconfig")
    (mode . #o644)
    (template? . #f))
+
+  ((name . emacs-config)
+   (action . clone)
+   (source . "https://github.com/shskwmt/hikizan-emacs")
+   (target . "~/.emacs.d"))
 )

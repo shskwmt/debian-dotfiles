@@ -5,7 +5,7 @@
   #:use-module (srfi srfi-1)
   #:export (read-cmd-output run! stderr info home repo-root
             path-join render-template
-            context abs-target))
+            context abs-target git-repo?))
 
 (define (stderr fmt . args) (apply format (current-error-port) fmt args))
 (define (info   fmt . args) (apply format (current-output-port) fmt args))
@@ -68,3 +68,7 @@
 (define (run! cmd . args)
   (format #t "+ ~a~{ ~a~}~%" cmd args)
   (apply system* cmd args))
+
+(define (git-repo? path)
+  "Returns #t if PATH is a git repository, otherwise #f."
+  (file-exists? (path-join path ".git")))
