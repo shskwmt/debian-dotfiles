@@ -1,0 +1,111 @@
+#!/usr/bin/guile \
+--no-auto-compile -e main -s
+!#
+;;; Debian package manager CLI
+
+(use-modules (ice-9 getopt-long)
+	     (ice-9 format)
+	     (dotfiles pkgs)
+	     (dotfiles core)
+	     (srfi srfi-1))
+
+(define (ensure-root simulate?)
+  (when (and (not simulate?)
+	     (false-if-exception (getenv "SUDO_USER"))
+	     #f)
+    #f)
+  (when (and (not simulate?)
+	     (not (= (getuid) 0)))
+    (stderr "This script needs root. Re-run with sudo (or use --simulate).\n")
+    (exit 1)))
+
+;; --- CLI ---
+(define option-spec
+  '((install (single-char #\i) (value #f))
+    (uninstall (single-char #\u) (value #f))
+    (list (single-char #\l) (value #f))
+    (only (single-char #\o) (value #t))
+    (simulate (single-char #\s) (value #f))
+    (no-update (value #f))
+    (config (single-char #\c) (value #t)) ;; New option for config path
+    (help (single-char #\h) (value #f))))
+
+(define options (getopt-long (command-line) option-spec))
+
+(define (usage)
+  (display "Usage: pkg-manager [ACTION] [OPTIONS]
+Actions (choose one):
+  --install, -i    : Install packages (default)
+  --uninstall, -u  : Uninstall packages
+  --list, -l       : List defined packages and their status
+
+Options:
+  --only, -o <pkgs> : Apply action only to a comma-separated list of packages
+  --simulate, -s    : Dry-run (no changes)
+  --no-update       : Skip 'apt-get update' (only for install)
+  --config, -c <path> : Path to the packages Scheme configuration file (default: ~/debian-dotfiles/config/packages.scm)
+  --help, -h        : Show this help message
+
+Examples:
+  sudo ./pkg-manager
+  ./pkg-manager --list
+  ./pkg-manager -l -o emacs,git
+  sudo ./pkg-manager -u -o python3
+  ./pkg-manager --install --simulate
+  ./pkg-manager --config /path/to/my/custom/packages.scm --list
+")
+  (exit 0))
+
+(define (string-split str delim)
+  (let loop ((s str) (acc '()))
+    (let ((i (string-contains s delim)))
+      (if i
+          (loop (substring s (+ i 1))
+                (cons (substring s 0 i) acc))
+          (reverse (cons s acc))))))
+
+(define (main args)
+  ;; Allow running from repo root without GUILE_LOAD_PATH set
+  (let ((repo (getcwd)))
+    (setenv "DOTFILES_REPO_ROOT" repo))
+
+  (let* ((opts (getopt-long args option-spec))
+         (help-wanted (option-ref opts 'help #f))
+         (install? (option-ref opts 'install #f))
+         (uninstall? (option-ref opts 'uninstall #f))
+         (list? (option-ref opts 'list #f))
+         (only-str (option-ref opts 'only #f))
+         (simulate? (option-ref opts 'simulate #f))
+         (no-update? (option-ref opts 'no-update #f))
+         (config-path (option-ref opts 'config #f)))
+
+    ;; Determine the actual config file path
+    (define actual-config-path
+      (if config-path
+          config-path
+          (path-join (repo-root) "config" "packages.scm"))) ;; Changed to .scm
+
+    ;; Load packages from Scheme file
+    (define packages-from-file
+      (call-with-input-file actual-config-path read)) ;; Use read to load Scheme list
+
+    ;; Handle mutually exclusive actions
+    (let ((actions (filter values (list install? uninstall? list?))))
+      (when (> (length actions) 1)
+        (stderr "Error: --install, --uninstall, and --list are mutually exclusive.\n")
+        (exit 1)))
+
+    ;; Determine the target packages
+    (let ((target-packages (if only-str
+                               (string-split only-str ",")
+                               packages-from-file))) ;; Use packages-from-file
+
+      (cond (help-wanted (usage))
+            (list? (list-packages target-packages))
+            (uninstall?
+             (ensure-root simulate?)
+             (uninstall target-packages #:simulate? simulate?))
+            (else ;; Default to install if no action specified
+             (ensure-root simulate?)
+             (install target-packages #:simulate? simulate? #:no-update? no-update?))))))
+

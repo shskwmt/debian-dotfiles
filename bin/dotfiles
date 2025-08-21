@@ -1,0 +1,79 @@
+#!/usr/bin/guile \
+--no-auto-compile -e main -s
+!#
+;; CLI entry point
+(use-modules (dotfiles core)
+             (dotfiles fs)
+             (dotfiles spec)
+             (ice-9 getopt-long)
+             (srfi srfi-1))
+
+(define option-spec
+  '((install     (single-char #\i) (value #f))
+    (uninstall   (single-char #\u) (value #f))
+    (dry-run     (single-char #\n) (value #f))
+    (only        (single-char #\o) (value #t))
+    (list        (single-char #\l) (value #f))
+    (help        (single-char #\h) (value #f))))
+
+(define (select-entries only)
+  (if (or (not only) (string=? only ""))
+      dotfiles
+      (let* ((wanted (string-split only #\,))
+             (wanted? (lambda (e) (member (symbol->string (assq-ref e 'name)) wanted))))
+        (filter wanted? dotfiles))))
+
+(define (print-list)
+  (for-each
+   (lambda (e)
+     (format #t "~a: ~a -> ~a (~a)~%"
+             (assq-ref e 'name)
+             (assq-ref e 'action)
+             (assq-ref e 'target)
+             (or (assq-ref e 'source) "inline")))
+   dotfiles))
+
+(define (usage)
+  (display "Usage: install-packages [ACTION] [OPTIONS]
+Actions (choose one):
+  --install, -i    : Install packages (default)
+  --uninstall, -u  : Uninstall packages
+  --list, -l       : List defined packages and their status
+
+Options:
+  --only, -o <pkgs> : Apply action only to a comma-separated list of packages
+  --simulate, -s    : Dry-run (no changes)
+  --no-update       : Skip 'apt-get update' (only for install)
+  --help, -h        : Show this help message
+
+Examples:
+  sudo ./install-packages
+  ./install-packages --list
+  ./install-packages -l -o emacs,git
+  sudo ./install-packages -u -o python3
+  ./install-packages --install --simulate
+")
+  (exit 0))
+
+(define (main args)
+  ;; allow running from repo root without GUILE_LOAD_PATH set
+  (let ((repo (getcwd)))
+    (setenv "DOTFILES_REPO_ROOT" repo))
+  (let* ((opts (getopt-long args option-spec))
+         (do-install? (option-ref opts 'install #f))
+         (do-uninst?  (option-ref opts 'uninstall #f))
+         (dry?        (option-ref opts 'dry-run #f))
+         (only        (option-ref opts 'only #f))
+         (do-list?    (option-ref opts 'list #f))
+         (do-help?    (or (option-ref opts 'help #f)
+                          (and (not do-install?) (not do-uninst?) (not do-list?)))))
+    (when do-help? (usage) (exit 0))
+    (when do-list? (print-list) (exit 0))
+    (let ((entries (select-entries only)))
+      (cond
+       (do-install?
+        (for-each (lambda (e) (install-one e #:dry? dry?)) entries))
+       (do-uninst?
+        (for-each (lambda (e) (uninstall-one e #:dry? dry?)) entries))
+       (else
+        (usage))))))
