@@ -3,6 +3,8 @@
 ("emacs"
  "git"
  "build-essential"
+ "emacs-mozc"
+ "emacs-mozc-bin"
  "fonts-noto-cjk"
  "python3"
  "python3-venv"
