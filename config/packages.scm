@@ -3,6 +3,8 @@
 ("emacs"
  "git"
  "build-essential"
+ "zip"
+ "unzip"
  "emacs-mozc"
  "emacs-mozc-bin"
  "fonts-noto-cjk"
