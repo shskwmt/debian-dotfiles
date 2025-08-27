@@ -5,6 +5,7 @@
  "build-essential"
  "zip"
  "unzip"
+ "curl"
  "emacs-mozc"
  "emacs-mozc-bin"
  "fonts-noto-cjk"
