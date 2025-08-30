@@ -6,6 +6,7 @@
  "zip"
  "unzip"
  "curl"
+ "wget"
  "apt-transport-https"
  "ca-certificates"
  "gnupg"
